@@ -1,14 +1,37 @@
-
 import sounddevice as sd
 import soundfile as sf
 from tkinter import *
+from tkinter import messagebox
 import numpy as np
 import librosa
 import pylab
 from tensorflow.keras.models import load_model
 import os
 import librosa.display
-  
+from tensorflow.keras.models import load_model
+import cv2
+import tensorflow_hub as hub
+import tensorflow.keras.backend as K
+
+def get_recall(y_true, y_pred): #taken from old keras source code
+    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+    possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
+    predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
+    # precision = true_positives / (predicted_positives + K.epsilon())
+    recall = true_positives / (possible_positives + K.epsilon())
+    # f1_val = 2*(precision*recall)/(precision+recall+K.epsilon())
+    return recall
+
+def get_f1(y_true, y_pred): #taken from old keras source code
+    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+    possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
+    predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
+    precision = true_positives / (predicted_positives + K.epsilon())
+    recall = true_positives / (possible_positives + K.epsilon())
+    f1_val = 2*(precision*recall)/(precision+recall+K.epsilon())
+    return f1_val
+
+
 def Voice_rec():
     fs = 48000
       
@@ -21,7 +44,7 @@ def Voice_rec():
     # Save as FLAC file at correct sampling rate
     return sf.write('my_Audio_file.wav', myrecording, fs)
   
-  
+model = load_model('model',custom_objects={'KerasLayer':hub.KerasLayer, 'get_recall': get_recall,'get_f1': get_f1})
 master = Tk()
 
 master.title("COUGH-BASED COVID-19 DETECTION")
@@ -62,24 +85,30 @@ def feature_extractor():
     savepath = "mfcc.png"
     pylab.savefig(savepath, bbox_inches=None, pad_inches=0)
     pylab.close()
+    img   = cv2.imread("mfcc.png")
+    img   = cv2.resize(img, (224,224),interpolation = cv2.INTER_CUBIC)
+    img   = np.array([img])
+    features = [[fever_muscle_pain.get(), respitory_condition.get()]]
+    features = np.array(features)
+    mfccsscaled = np.array([mfccsscaled])
+    data = []
+    data.append([mfccsscaled, img, features])
+    predicted = model.predict(data)
+    if predicted >= 0.5:
+      messagebox.showinfo('result', 'You are POSITIVE to COVID-19')
+    else:
+      messagebox.showinfo('result', 'You are NEGATIVE to COVID-19')
   return mfccsscaled,savepath
 
 count = StringVar()
   
-Label(master, text=" Voice Recoder : "
+Label(master, text=" Voice Recoder (5s): "
      ).grid(row=2, sticky=W)
 
 b = Button(master, text="Start", command=Voice_rec)
 b.grid(row=2, column=3)
 
-# submit = Button(master, text="Start", command=Voice_rec)
-# submit.grid(row=3, column=2, columnspan=2, rowspan=2,
-#        padx=5, pady=5)
-
 b = Button(master, text="Submit", command=feature_extractor)
 b.grid(row=4, column=3, padx=5, pady=20)
-
-# result = Label(master, text="You are negative with COVID-19")
-# result.grid(row=4, column=0)
   
 mainloop()
